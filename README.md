@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # my-vuepress-site
 
 The Site is generated using [vuepress](https://vuepress.vuejs.org/) and [vuepress-theme-plume](https://github.com/pengzhanbo/vuepress-theme-plume)
@@ -40,3 +41,7 @@ To customize a domain name, please refer to [Github Pages](https://docs.github.c
 
 - [vuepress](https://vuepress.vuejs.org/)
 - [vuepress-theme-plume](https://theme-plume.vuejs.press/)
+=======
+# cloudnotes.github.io
+This is a personal blog that records daily learning and paper reading notes.
+>>>>>>> origin/main
