@@ -48,8 +48,7 @@ Base 模型就是现在比较常见的多层神经网络，即先对特征进行
 ![alt text](pic/din.png)
 
 ##### Activation Unit
-对于用户的每个行为 Embedding 向量，我们都需要计算出一个权重，这个权重代表了对于当前商品广告的预测，用户历史行为的各个商品的重要程度大小。
-![alt text](pic/din_attention.png)
+对于用户的每个行为 Embedding 向量，都需要计算出一个权重，这个权重代表了对于当前商品广告的预测，用户历史行为的各个商品的重要程度大小。
 
 在本文当中计算 Attention 权重的方式是利用用户行为的 Embedding 向量和广告的 Embedding 向量来进行计算，具体文章中采用的是用一个神经网络（activation unit）来得到 weight，其网络结构如下
 ![alt text](pic/din_unit.png)
