@@ -1,5 +1,8 @@
 ---
-title: FRNet
+title: FRNet：特征强化网络
+tags:
+  - 推荐算法
+  - CTR模型
 createTime: 2024/10/11 23:06:10
 permalink: /article/pti7zdet/
 ---
@@ -8,6 +11,15 @@ permalink: /article/pti7zdet/
 根据遗忘曲线：如果没有记录和回顾，6天后便会忘记75%的内容
 
 阅读笔记正是帮助你记录和回顾的工具，不必拘泥于形式，其核心是：记录、翻看、思考
+:::
+
+::: info 信息
+论文 [Enhancing CTR Prediction with Context-Aware Feature Representation Learning](https://arxiv.org/pdf/2204.08758)     
+
+代码 [https://github.com/frnetnetwork/frnet/tree/main](https://github.com/frnetnetwork/frnet/tree/main)
+
+摘要: 本文提出了一个称为特征细化网络（FRNet）的新颖模块，它可以在不同上下文中为每个特征在位级别学习上下文感知的特征表示。FRNet 由两个关键组件组成：1）信息提取单元（IEU），它捕获上下文信息和跨特征关系，以指导上下文感知的特征细化； 2）互补选择门（CSGate），它自适应地将IEU中学习到的原始特征表示和互补特征表示与比特级权重相结合。
+
 :::
 
 ## 贡献
@@ -54,109 +66,9 @@ $$E_{g}=IEU_{G}(E),W_{b}=IEU_{W}(E).$$
 ### 互补选择门（Complementary Selection Gate，CSGate）
 在 CSGate 中，设计了一种新颖的门机制来控制信息流，并从具有位级权重的原始和互补特征中选择重要信息。如图 2 (a) 所示，CSGate 有三个不同输入： 1) 互补特征表征$E_{g}$； 2) 权重矩阵$W_{b}$； 3) 原始特征表示$E$。CSGate 的输出是上下文感知特征表示，公式如下，$\sigma$为 sigmoid 函数：
 $$E_{r}=E\odot \sigma(W_{b})+E_{g}\odot (1-\sigma(W_{b})).$$
+其中，$E_{r}$代表 CSGate 的输出 embedding，$E$ 代表模型的原始embedding，$E_g$代表经过 $IEU_{G}$ 处理过后的上下文特征信息。通过这样的构建方式，FRNet 在保留原始特征表达的基础上，强化了输入特征的表达能力，使得后续的 CTR 预估模型能够更好的表达文本的效能。
+
+从 CSGate 的选择模式来看，其相当于是对原始 embedding 和经过 IEU 强化后的 embedding 进行了归一化加和。利用将原始特征表示和互补特性表征进行结合，构建出了 bit-level 的 context-aware feature interactions，强化了特征的表征方式。
 
 ## 总结
-本文介绍了由浙江大学联合新加坡国立大学提出的AFM模型。AFM 模型是一种基于注意力机制的推荐模型，它通过结合特征交叉和用户兴趣的权重学习，能够更准确地捕捉用户的兴趣和行为之间的复杂关系。
-
-## 代码实现
-```python
-import tensorflow as tf
-from tensorflow.keras.layers import Layer, Dense, PReLU, BatchNormalization, Dropout
-from tensorflow.keras import Sequential
-
-class FRNet(Layer):
-    def __init__(self, field_length, embed_dim, weight_type="bit", num_layers=1, att_size=10, mlp_layer=256):
-        super(FRNet, self).__init__()
-
-        # IEU_G computes complementary features.
-        self.IEU_G = IEU(field_length, embed_dim, weight_type="bit", bit_layers=num_layers, att_size=att_size,
-                         mlp_layer=mlp_layer)
-
-        # IEU_W computes bit-level or vector-level weights.
-        self.IEU_W = IEU(field_length, embed_dim, weight_type=weight_type, bit_layers=num_layers, att_size=att_size,
-                         mlp_layer=mlp_layer)
-
-    def call(self, x_embed, **kwargs):
-
-        com_feature = self.IEU_G(x_embed)
-        weight_matrix = tf.sigmoid(self.IEU_W(x_embed))
-
-        # CSGate
-        x_out = x_embed * weight_matrix + com_feature * (tf.constant(1.0) - weight_matrix)
-
-        return x_out
-
-
-class IEU(Layer):
-    def __init__(self, field_length, embed_dim, weight_type="bit", bit_layers=1, att_size=10, mlp_layer=256):
-        super(IEU, self).__init__()
-
-        self.input_dim = field_length * embed_dim
-        self.weight_type = weight_type
-
-        # Self-attention unit
-        self.vector_info = SelfAttention(embed_dim=embed_dim, att_size=att_size)
-
-        mlp_layers = [mlp_layer for _ in range(bit_layers)]
-
-        self.mlps = MLP(embed_dims=mlp_layers, output_layer=False)
-        self.bit_projection = Dense(units=embed_dim, activation='relu')
-
-    def call(self, inputs, **kwargs):
-        # self-attention unit
-        x_vector = self.vector_info(inputs)
-        # CIE unit
-        mlp_input = tf.reshape(inputs, [-1, self.input_dim])
-        x_bit = self.mlps(mlp_input)
-        x_bit = self.bit_projection(x_bit)
-        x_bit = tf.expand_dims(x_bit, axis=1)
-        # integration unit
-        x_out = x_bit * x_vector
-
-        if self.weight_type == "vector":
-            x_out = tf.reduce_sum(x_out, axis=2, keepdims=True)
-        return x_out
-
-
-class SelfAttention(Layer):
-    def __init__(self, embed_dim, att_size=20):
-        super(SelfAttention, self).__init__()
-        self.embed_dim = embed_dim
-        self.trans_Q = Dense(units=att_size)
-        self.trans_K = Dense(units=att_size)
-        self.trans_V = Dense(units=att_size)
-        self.projection = Dense(units=embed_dim)
-
-    def call(self, inputs, **kwargs):
-        Q = self.trans_Q(inputs)
-        K = self.trans_K(inputs)
-        V = self.trans_V(inputs)
-
-        attention = tf.matmul(Q, tf.transpose(K, perm=[0, 2, 1]))  # B,F,F
-        attention_score = tf.nn.softmax(attention, axis=-1)
-        context = tf.matmul(attention_score, V)
-        context = self.projection(context)
-        return context
-
-
-class MLP(Layer):
-    def __init__(self, embed_dims, dropout=0.5, output_layer=True):
-        super(MLP, self).__init__()
-        layers = []
-        for embed_dim in embed_dims:
-            layers.append(Dense(embed_dim, kernel_initializer='glorot_uniform'))
-            layers.append(BatchNormalization())
-            layers.append(PReLU())
-            layers.append(Dropout(dropout))
-
-        if output_layer:
-            layers.append(Dense(1))
-        self.mlp = Sequential(layers)
-
-    def call(self, inputs, **kwargs):
-        """
-        :param x: [B,F*E]
-        """
-        return self.mlp(inputs)
-
-```
+提出了一个名为 FRNet 的新模块，该模块可以学习上下文感知的特征表示，并可用于大多数 CTR 预测模型中，以提高其性能。在 FRNet 中，作者设计 IEU 来集成上下文信息和交叉特征关系，使自我注意能够在每个实例中包含上下文信息；还设计了 CSGate，将原始和补充特征表示与学习的位级权重集成在一起。实验表明，FRNet 的每种设计都有助于提高整体性能。
